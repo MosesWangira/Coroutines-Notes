@@ -1,5 +1,9 @@
 COROUTINES
+Coroutines are a Kotlin feature that convert async callbacks for long-running tasks, such as database or network access,
+into sequential code.
+They are sort of tasks that the actual threads can execute.
 
+Example
 import kotlinx.coroutines.*
 
 fun main() {
