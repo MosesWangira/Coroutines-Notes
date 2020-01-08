@@ -1,0 +1,203 @@
+COROUTINES
+
+import kotlinx.coroutines.*
+
+fun main() {
+    GlobalScope.launch { // launch a new coroutine in background and continue
+        delay(1000L) // non-blocking delay for 1 second (default time unit is ms)
+        println("Moses!") // print after delay
+    }
+    println("Hello,") // main thread continues while coroutine is delayed
+    Thread.sleep(2000L) // block main thread for 2 seconds to keep JVM alive
+}
+
+prints hello world 
+As you run the code coroutine starts on background thread and waits for 1 second meanwhile the main thread is executing and prints Hello.
+
+Essentially, coroutines are light-weight threads. They are launched with launch coroutine builder in a context of some CoroutineScope. 
+Here launching a new coroutine in the GlobalScope, means that the lifetime of the new coroutine is limited only by the lifetime of the whole application.
+
+Alternatively one can use Thread instead of GlobalScope.launch
+e.g
+thread{
+  Thread.delay(1000L)
+  print("Moses")
+}
+println("Hello")
+}
+
+This does the same thing as the first when I used GlobalScope
+That is because delay is a special suspending function that does not block a thread, but suspends coroutine and it can be only used from a coroutine
+
+/**
+ *Use Thread.Sleep when you want to block the current thread. Use Task.Delay when you want a logical delay without blocking the current thread.
+ */
+
+Thread.currentThread returns parameters
+ e.g if on background thread
+Thread.currentThread()
+returns
+ Thread[Thread-0,5,main]
+which refers to name, priority,group
+
+Bridging blocking and non-blocking worlds
+runBlocking coroutine builder:
+
+import kotlinx.coroutines.*
+
+fun main() { 
+    GlobalScope.launch { // launch a new coroutine in background and continue
+        delay(1000L)
+        println("World!")
+    }
+    println("Hello,") // main thread continues here immediately
+    runBlocking {     // but this expression blocks the main thread
+        delay(2000L)  // ... while we delay for 2 seconds to keep JVM alive
+    } 
+}
+
+delay
+suspend fun delay(timeMillis: Long): Unit (source)
+Delays coroutine for a given time without blocking a thread and resumes it after a specified time. 
+This suspending function is cancellable. 
+If the Job of the current coroutine is cancelled or completed while this suspending function is waiting, this function immediately resumes with CancellationException.
+Note that delay can be used in select invocation with onTimeout clause.
+Implementation note: how exactly time is tracked is an implementation detail of CoroutineDispatcher in the context.
+
+Waiting for a job
+ Edit Page
+Table of contents
+
+Coroutine Basics
+Your first coroutine
+Bridging blocking and non-blocking worlds
+Waiting for a job
+Structured concurrency
+Scope builder
+Extract function refactoring
+Coroutines ARE light-weight
+Global coroutines are like daemon threads
+Coroutine Basics
+This section covers basic coroutine concepts.
+
+Your first coroutine
+Run the following code:
+
+import kotlinx.coroutines.*
+?
+fun main() {
+    GlobalScope.launch { // launch a new coroutine in background and continue
+        delay(1000L) // non-blocking delay for 1 second (default time unit is ms)
+        println("World!") // print after delay
+    }
+    println("Hello,") // main thread continues while coroutine is delayed
+    Thread.sleep(2000L) // block main thread for 2 seconds to keep JVM alive
+}
+Target platform: JVMRunning on kotlin v. 1.3.61
+You can get full code here.
+
+You will see the following result:
+
+Hello,
+World!
+Essentially, coroutines are light-weight threads. They are launched with launch coroutine builder in a context of some CoroutineScope. Here we are launching a new coroutine in the GlobalScope, meaning that the lifetime of the new coroutine is limited only by the lifetime of the whole application.
+
+You can achieve the same result replacing GlobalScope.launch { ... } with thread { ... } and delay(...) with Thread.sleep(...). Try it (don't forget to import kotlin.concurrent.thread).
+
+If you start by replacing GlobalScope.launch by thread, the compiler produces the following error:
+
+Error: Kotlin: Suspend functions are only allowed to be called from a coroutine or another suspend function
+That is because delay is a special suspending function that does not block a thread, but suspends coroutine and it can be only used from a coroutine.
+
+Bridging blocking and non-blocking worlds
+The first example mixes non-blocking delay(...) and blocking Thread.sleep(...) in the same code. It is easy to lose track of which one is blocking and which one is not. Let's be explicit about blocking using runBlocking coroutine builder:
+
+import kotlinx.coroutines.*
+?
+fun main() { 
+    GlobalScope.launch { // launch a new coroutine in background and continue
+        delay(1000L)
+        println("World!")
+    }
+    println("Hello,") // main thread continues here immediately
+    runBlocking {     // but this expression blocks the main thread
+        delay(2000L)  // ... while we delay for 2 seconds to keep JVM alive
+    } 
+}
+Target platform: JVMRunning on kotlin v. 1.3.61
+You can get full code here.
+
+The result is the same, but this code uses only non-blocking delay. The main thread invoking runBlocking blocks until the coroutine inside runBlocking completes.
+
+This example can be also rewritten in a more idiomatic way, using runBlocking to wrap the execution of the main function:
+
+import kotlinx.coroutines.*
+?
+fun main() = runBlocking<Unit> { // start main coroutine
+    GlobalScope.launch { // launch a new coroutine in background and continue
+        delay(1000L)
+        println("World!")
+    }
+    println("Hello,") // main coroutine continues here immediately
+    delay(2000L)      // delaying for 2 seconds to keep JVM alive
+}
+Target platform: JVMRunning on kotlin v. 1.3.61
+You can get full code here.
+
+Here runBlocking<Unit> { ... } works as an adaptor that is used to start the top-level main coroutine. We explicitly specify its Unit return type, because a well-formed main function in Kotlin has to return Unit.
+
+This is also a way to write unit tests for suspending functions:
+
+class MyTest {
+    @Test
+    fun testMySuspendingFunction() = runBlocking<Unit> {
+        // here we can use suspending functions using any assertion style that we like
+    }
+}
+Waiting for a job
+Delaying for a time while another coroutine is working is not a good approach. Let's explicitly wait (in a non-blocking way) until the background Job 
+that we have launched is complete:
+
+val job = GlobalScope.launch { // launch a new coroutine and keep a reference to its Job
+    delay(1000L)
+    println("World!")
+}
+println("Hello,")
+job.join() // wait until child coroutine completes
+Hello,
+World!
+The result is still the same, but the code of the main coroutine is not tied to the duration of the background job in any way. Much better.
+
+Extract function refractoring
+
+import kotlinx.coroutines.*
+
+fun main() = runBlocking {
+    launch { doWorld() }
+    println("Hello,")
+}
+
+// this is your first suspending function
+suspend fun doWorld() {
+    delay(1000L)
+    println("World!")
+}
+
+Suspending functions can be used inside coroutines just like regular functions, but their additional feature is that they can, in turn, 
+use other suspending functions, like delay in this example, to suspend execution of a coroutine
+
+Coroutines as light weight
+import kotlinx.coroutines.*
+
+fun main() = runBlocking {
+    repeat(100_000) { // launch a lot of coroutines
+        launch {
+            delay(1000L)
+            print(".")
+        }
+    }
+}
+
+Active coroutines that were launched in GlobalScope do not keep the process alive. They are like daemon threads.
+It launches 100K coroutines and, after a second, each coroutine prints a dot
+
